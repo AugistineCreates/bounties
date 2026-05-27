@@ -102,17 +102,13 @@ export function SearchCommand() {
           const projId = bounty.project.id;
           if (!seenProjects.has(projId)) {
             seenProjects.add(projId);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const proj = bounty.project as any;
             projects.push({
               id: projId,
-              name:
-                bounty.project.title ||
-                bounty.project.name ||
-                "Unnamed Project",
-              description: bounty.project.description || "",
-              logoUrl:
-                bounty.project.logoUrl ||
-                (bounty.project as { logo?: string }).logo ||
-                null,
+              name: proj.title || proj.name || "Unnamed Project",
+              description: proj.description || "",
+              logoUrl: proj.logoUrl || proj.logo || null,
             });
           }
         }
