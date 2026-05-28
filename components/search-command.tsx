@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Clock, X } from "lucide-react";
+import { FileText } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   CommandDialog,
@@ -13,26 +14,40 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { useBountySearch } from "@/hooks/use-bounty-search";
+import { bountyKeys } from "@/lib/query/query-keys";
+import { getAllProjects } from "@/lib/mock-project";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { type BountyFieldsFragment } from "@/lib/graphql/generated";
+
+const PAGES = [
+  { title: "Bounties", href: "/bounty" },
+  { title: "Projects", href: "/projects" },
+  { title: "Leaderboard", href: "/leaderboard" },
+  { title: "Wallet", href: "/wallet" },
+];
+
+interface SearchProject {
+  id: string;
+  name: string;
+  description: string;
+  logoUrl: string | null;
+}
 
 export function SearchCommand() {
   const router = useRouter();
-  const {
-    searchTerm,
-    setSearchTerm,
-    isOpen,
-    setIsOpen,
-    toggleOpen,
-    results,
-    isLoading,
-    recentSearches,
-    addRecentSearch,
-    removeRecentSearch,
-    clearRecentSearches,
-  } = useBountySearch();
+  const queryClient = useQueryClient();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [cachedBounties, setCachedBounties] = React.useState<
+    BountyFieldsFragment[]
+  >([]);
+  const [cachedProjects, setCachedProjects] = React.useState<SearchProject[]>(
+    [],
+  );
+
+  const toggleOpen = React.useCallback(() => setIsOpen((prev) => !prev), []);
 
   // Platform detection for keyboard shortcut
   const [modifierKey, setModifierKey] = React.useState<string>("⌘");
@@ -59,21 +74,105 @@ export function SearchCommand() {
     return () => document.removeEventListener("keydown", down);
   }, [toggleOpen]);
 
-  const runCommand = React.useCallback(
-    (command: () => unknown) => {
-      setIsOpen(false);
-      command();
-    },
-    [setIsOpen],
-  );
+  // Extract unique bounties and projects from TanStack Query cache on dialog open
+  React.useEffect(() => {
+    if (!isOpen) return;
 
-  const handleSelect = (bountyId: string, title: string) => {
-    addRecentSearch(title);
-    runCommand(() => router.push(`/bounty/${bountyId}`));
-  };
+    const bounties: BountyFieldsFragment[] = [];
+    const projects: SearchProject[] = [];
+    const seenBounties = new Set<string>();
+    const seenProjects = new Set<string>();
 
-  const handleRecentSelect = (term: string) => {
-    setSearchTerm(term);
+    const extractFromObject = (obj: unknown) => {
+      if (!obj || typeof obj !== "object") return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const record = obj as any;
+
+      // Directly check for BountyFieldsFragment/Bounty properties
+      if (typeof record.id === "string" && typeof record.title === "string") {
+        const bounty = record as BountyFieldsFragment;
+        if (!seenBounties.has(bounty.id)) {
+          seenBounties.add(bounty.id);
+          bounties.push(bounty);
+        }
+
+        // Dynamically extract cached project from bounty fields
+        if (bounty.project && typeof bounty.project.id === "string") {
+          const projId = bounty.project.id;
+          if (!seenProjects.has(projId)) {
+            seenProjects.add(projId);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const proj = bounty.project as any;
+            projects.push({
+              id: projId,
+              name: proj.title || proj.name || "Unnamed Project",
+              description: proj.description || "",
+              logoUrl: proj.logoUrl || proj.logo || null,
+            });
+          }
+        }
+        return;
+      }
+
+      // BountiesQuery structure
+      if (record.bounties && Array.isArray(record.bounties.bounties)) {
+        record.bounties.bounties.forEach((b: unknown) => extractFromObject(b));
+        return;
+      }
+
+      // Array structure (PaginatedResponse.data or raw array)
+      if (Array.isArray(record.data)) {
+        record.data.forEach((b: unknown) => extractFromObject(b));
+        return;
+      }
+      if (Array.isArray(record)) {
+        record.forEach((b: unknown) => extractFromObject(b));
+        return;
+      }
+
+      // InfiniteQuery pages structure
+      if (Array.isArray(record.pages)) {
+        record.pages.forEach((page: unknown) => extractFromObject(page));
+        return;
+      }
+    };
+
+    // 1. Query the cache across all known list keys
+    const listKeys = bountyKeys.allListKeys || [["Bounties"]];
+    listKeys.forEach((queryKey) => {
+      const queries = queryClient.getQueriesData({ queryKey });
+      queries.forEach((entry) => {
+        extractFromObject(entry[1]);
+      });
+    });
+
+    // 2. Fetch mock projects as a robust fallback/seed to guarantee 100% coverage
+    try {
+      const allMockProjects = getAllProjects();
+      allMockProjects.forEach((p) => {
+        if (!seenProjects.has(p.id)) {
+          seenProjects.add(p.id);
+          projects.push({
+            id: p.id,
+            name: p.name,
+            description: p.description || "",
+            logoUrl: p.logoUrl || null,
+          });
+        }
+      });
+    } catch (e) {
+      console.error("Failed to load static projects fallback", e);
+    }
+
+    setCachedBounties(bounties);
+    setCachedProjects(projects);
+  }, [isOpen, queryClient]);
+
+  const handleSelect = (href: string) => {
+    setIsOpen(false);
+    setSearchTerm("");
+    router.push(href);
   };
 
   return (
@@ -98,70 +197,93 @@ export function SearchCommand() {
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
 
-          {!searchTerm && recentSearches.length > 0 && (
-            <CommandGroup heading="Recent Searches">
-              {recentSearches.map((term) => (
-                <CommandItem
-                  key={term}
-                  value={term}
-                  onSelect={() => handleRecentSelect(term)}
-                >
-                  <Clock className="mr-2 h-4 w-4" />
-                  <span>{term}</span>
-                  <button
-                    type="button"
-                    className="ml-auto flex h-4 w-4 items-center justify-center rounded-sm hover:bg-gray-200 opacity-70 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-gray-400"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeRecentSearch(term);
-                    }}
-                    aria-label={`Remove recent search ${term}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </CommandItem>
-              ))}
+          {/* Pages heading - always rendered, filtered natively by cmdk */}
+          <CommandGroup heading="Pages">
+            {PAGES.map((page) => (
               <CommandItem
-                onSelect={clearRecentSearches}
-                className="text-xs text-muted-foreground justify-center"
+                key={page.href}
+                value={page.title}
+                onSelect={() => handleSelect(page.href)}
               >
-                Clear recent searches
+                <FileText className="mr-2 h-4 w-4" />
+                <span>{page.title}</span>
               </CommandItem>
-            </CommandGroup>
-          )}
+            ))}
+          </CommandGroup>
 
-          {isLoading ? (
-            <div className="p-4 space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-[80%]" />
-              <Skeleton className="h-4 w-[60%]" />
-            </div>
-          ) : (
-            results.length > 0 && (
-              <CommandGroup heading="Bounties">
-                {results.map((bounty) => (
-                  <CommandItem
-                    key={bounty.id}
-                    value={bounty.title}
-                    onSelect={() => handleSelect(bounty.id, bounty.title)}
-                  >
-                    <FileText className="mr-2 h-4 w-4" />
-                    <div className="flex flex-col">
-                      <span>{bounty.title}</span>
-                      <span className="text-xs text-gray-500">
-                        {bounty.organization?.name ?? "Unknown"} •{" "}
-                        {bounty.status}
-                      </span>
-                    </div>
-                    {bounty.rewardAmount && (
-                      <Badge variant="secondary" className="ml-auto">
-                        {bounty.rewardAmount} {bounty.rewardCurrency}
-                      </Badge>
-                    )}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )
+          {/* Bounties and Projects groups are only shown if searchTerm is non-empty */}
+          {searchTerm.trim() !== "" && (
+            <>
+              {cachedBounties.length > 0 && (
+                <CommandGroup heading="Bounties">
+                  {cachedBounties.map((bounty) => (
+                    <CommandItem
+                      key={bounty.id}
+                      value={bounty.title}
+                      onSelect={() => handleSelect(`/bounty/${bounty.id}`)}
+                    >
+                      <Avatar className="mr-2 size-5 rounded-sm">
+                        {bounty.organization?.logo ? (
+                          <AvatarImage
+                            src={bounty.organization.logo}
+                            alt={bounty.organization.name}
+                          />
+                        ) : null}
+                        <AvatarFallback className="rounded-sm text-[10px] font-semibold">
+                          {(bounty.organization?.name ?? "Unknown")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span>{bounty.title}</span>
+                        <span className="text-xs text-gray-500">
+                          {bounty.organization?.name ?? "Unknown"} •{" "}
+                          {bounty.status}
+                        </span>
+                      </div>
+                      {bounty.rewardAmount && (
+                        <Badge variant="secondary" className="ml-auto">
+                          {bounty.rewardAmount} {bounty.rewardCurrency}
+                        </Badge>
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+
+              {cachedProjects.length > 0 && (
+                <CommandGroup heading="Projects">
+                  {cachedProjects.map((project) => (
+                    <CommandItem
+                      key={project.id}
+                      value={project.name}
+                      onSelect={() => handleSelect(`/projects/${project.id}`)}
+                    >
+                      <Avatar className="mr-2 size-5 rounded-sm">
+                        {project.logoUrl ? (
+                          <AvatarImage
+                            src={project.logoUrl}
+                            alt={project.name}
+                          />
+                        ) : null}
+                        <AvatarFallback className="rounded-sm text-[10px] font-semibold">
+                          {project.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span>{project.name}</span>
+                        {project.description && (
+                          <span className="text-xs text-gray-500 line-clamp-1">
+                            {project.description}
+                          </span>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </>
           )}
         </CommandList>
       </CommandDialog>
