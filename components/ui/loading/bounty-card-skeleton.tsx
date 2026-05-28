@@ -22,7 +22,7 @@ export function BountyCardSkeleton() {
           <Skeleton className="h-6 w-20 rounded-full" />
         </div>
       </CardHeader>
-      <CardFooter className="border-t border-[#f0f0f0] dark:border-slate-700 py-3 px-5">
+      <CardFooter className="border-t border-border py-3 px-5">
         <div className="flex items-center gap-2 w-full justify-between">
           <div className="flex items-center gap-2">
             <Skeleton className="h-5 w-5 rounded-full" />
