@@ -157,6 +157,97 @@ export function useSelectApplicant() {
     },
   });
 }
+// ---------------------------------------------------------------------------
+// Hook: decline applicant
+// ---------------------------------------------------------------------------
+
+type DeclinedApplicationRecord = {
+  id?: string;
+  bountyId?: string;
+  applicantAddress?: string;
+  status?: string;
+  declinedReason?: string;
+  declineReason?: string;
+  declinedAt?: string;
+};
+
+type BountyWithApplications = BountyQuery & {
+  bounty?: BountyQuery["bounty"] & {
+    applications?: DeclinedApplicationRecord[];
+  };
+};
+
+export function useDeclineApplicant() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      bountyId,
+      applicantAddress,
+      reason,
+    }: {
+      bountyId: string;
+      applicantAddress: string;
+      reason?: string;
+    }) => {
+      return {
+        bountyId,
+        applicantAddress,
+        reason: reason?.trim() || undefined,
+        declinedAt: new Date().toISOString(),
+      };
+    },
+
+    onMutate: async ({ bountyId, applicantAddress, reason }) => {
+      await qc.cancelQueries({ queryKey: bountyKeys.detail(bountyId) });
+
+      const prev = qc.getQueryData<BountyWithApplications>(
+        bountyKeys.detail(bountyId),
+      );
+
+      if (prev?.bounty?.applications) {
+        const declinedAt = new Date().toISOString();
+
+        qc.setQueryData<BountyWithApplications>(bountyKeys.detail(bountyId), {
+          ...prev,
+          bounty: {
+            ...prev.bounty,
+            applications: prev.bounty.applications
+              .map((application) =>
+                application.applicantAddress === applicantAddress
+                  ? {
+                      ...application,
+                      status: "DECLINED",
+                      declineReason: reason?.trim() || undefined,
+                      declinedReason: reason?.trim() || undefined,
+                      declinedAt,
+                    }
+                  : application,
+              )
+              .filter(
+                (application) =>
+                  application.applicantAddress !== applicantAddress,
+              ),
+            updatedAt: declinedAt,
+          },
+        });
+      }
+
+      return { prev, bountyId };
+    },
+
+    onError: (_error, _variables, context) => {
+      if (context?.prev) {
+        qc.setQueryData(bountyKeys.detail(context.bountyId), context.prev);
+      }
+    },
+
+    onSettled: (_result, _error, variables) => {
+      qc.invalidateQueries({ queryKey: bountyKeys.detail(variables.bountyId) });
+      qc.invalidateQueries({ queryKey: bountyKeys.lists() });
+    },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Hook: submit work (BountyRegistry.submit_work)
