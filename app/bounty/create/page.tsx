@@ -44,8 +44,8 @@ export default function CreateBountyPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-amber-900">
-          We're building a powerful form to help you create bounties. Check back
-          soon!
+          We&apos;re building a powerful form to help you create bounties. Check
+          back soon!
         </CardContent>
       </Card>
     </div>
