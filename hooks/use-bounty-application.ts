@@ -38,13 +38,16 @@ export function useBountyApplication(bountyId: string) {
       );
 
       if (previous?.bounty) {
-        const contributorProgress = previous.bounty.contributorProgress || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const contributorProgress =
+          (previous.bounty as any).contributorProgress || [];
         const contributorIndex = contributorProgress.findIndex(
           (c) => c.userId === contributorId,
         );
 
         if (contributorIndex >= 0) {
-          const milestones = previous.bounty.milestones || [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const milestones = (previous.bounty as any).milestones || [];
           const currentMilestoneId =
             contributorProgress[contributorIndex].currentMilestoneId;
           const milestoneIndex = milestones.findIndex(
@@ -92,7 +95,9 @@ export function useBountyApplication(bountyId: string) {
       );
 
       if (previous?.bounty) {
-        const contributorProgress = previous.bounty.contributorProgress || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const contributorProgress =
+          (previous.bounty as any).contributorProgress || [];
 
         queryClient.setQueryData<BountyQuery>(bountyKeys.detail(bountyId), {
           ...previous,
