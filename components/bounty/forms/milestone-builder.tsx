@@ -113,6 +113,7 @@ export function MilestoneBuilder<
                 size="icon-sm"
                 onClick={() => remove(index)}
                 disabled={fields.length === 1}
+                aria-label="Remove milestone"
                 className="text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="size-4" />

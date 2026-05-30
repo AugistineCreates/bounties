@@ -1,5 +1,3 @@
-// Codegen reads the canonical schema from ../boundless-nestjs/src/schema.gql
-// If you need a local copy in this repo, run: `npm run sync-schema`
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
 const config: CodegenConfig = {
@@ -15,7 +13,10 @@ const config: CodegenConfig = {
       plugins: [
         {
           add: {
-            content: "import { gql } from 'graphql-tag';",
+            content: [
+              'export { TypedDocumentString } from "./typed-document-string";',
+              'import { TypedDocumentString } from "./typed-document-string";',
+            ].join("\n"),
           },
         },
         "typescript",
@@ -29,7 +30,7 @@ const config: CodegenConfig = {
         },
         exposeQueryKeys: true,
         reactQueryVersion: 5,
-        documentMode: "graphQLTag",
+        documentMode: "string",
         scalars: {
           DateTime: "string",
           JSON: "Record<string, any>",

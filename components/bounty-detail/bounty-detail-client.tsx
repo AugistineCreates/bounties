@@ -4,28 +4,37 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MobileCTA, SidebarCTA } from "./bounty-detail-sidebar-cta";
+import { SidebarCTA } from "./bounty-detail-sidebar-cta";
+import { MobileCTA } from "./bounty-detail-mobile-cta";
 import { HeaderCard } from "./bounty-detail-header-card";
 import { DescriptionCard } from "./bounty-detail-description-card";
 import { BountyDetailSubmissionsCard } from "./bounty-detail-submissions-card";
-import { BountyDetailSkeleton } from "./bounty-detail-bounty-detail-skeleton";
+import { BountyDetailSkeleton } from "@/components/ui/loading";
 import { useBountyDetail } from "@/hooks/use-bounty-detail";
 import { FcfsApprovalPanel } from "@/components/bounty/fcfs-approval-panel";
+import { CompetitionJudging } from "@/components/bounty/competition-judging";
 import { EscrowDetailPanel } from "../bounty/escrow-detail-panel";
 import { RefundStatusTracker } from "../bounty/refund-status";
 import { FeeCalculator } from "../bounty/fee-calculator";
 import { useEscrowPool } from "@/hooks/use-escrow";
 import { authClient } from "@/lib/auth-client";
+import { useDeadlinePassed } from "@/hooks/use-deadline-passed";
 import type { CancellationRecord } from "@/types/escrow";
 import { MilestoneFunnel } from "@/components/bounty/milestone-funnel";
 import {
   MOCK_MODEL4_MILESTONES,
   MOCK_MODEL4_CONTRIBUTORS,
-} from "@/lib/mock-model4";
+} from "@/lib/mock/model4";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MilestoneSubmissionCard } from "./milestone-submission-card";
 import { Model4MaintainerDashboard } from "./model4-maintainer-dashboard";
 import type { Milestone, ContributorProgress } from "@/types/bounty";
+import {
+  ApplicationReviewDashboard,
+  type Application,
+} from "@/components/bounty/application-review-dashboard";
+import { SubmissionApprovalPanel } from "@/components/bounty/submission-approval-panel";
+import { ApplicationSubmitWorkPanel } from "@/components/bounty/application-submit-work-panel";
 
 type BountyData = ReturnType<typeof useBountyDetail>["data"];
 
@@ -59,18 +68,25 @@ function getFullMilestoneData(bounty: BountyData): {
   };
 }
 
+// Backend does not currently provide applications in the response.
+// Fall back to empty array until the schema supports it.
+const getApplications = (bounty: BountyData): Application[] => {
+  return bounty?.applications ?? [];
+};
+
 export function BountyDetailClient({ bountyId }: { bountyId: string }) {
   const router = useRouter();
   const { data: bounty, isPending, isError, error } = useBountyDetail(bountyId);
   const { data: pool } = useEscrowPool(bountyId);
+  const { data: session } = authClient.useSession();
   const [cancellationRecord, setCancellationRecord] =
     useState<CancellationRecord | null>(null);
-
-  const { data: session } = authClient.useSession();
 
   const handleCancelled = useCallback((record: CancellationRecord) => {
     setCancellationRecord(record);
   }, []);
+
+  const pastDeadline = useDeadlinePassed(bounty?.bountyWindow?.endDate);
 
   if (isPending) return <BountyDetailSkeleton />;
 
@@ -124,6 +140,26 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
 
   const isCancelled =
     bounty.status === "CANCELLED" || cancellationRecord !== null;
+
+  const isCompetition = bounty.type === "COMPETITION";
+  const isCreator =
+    (session?.user as { id?: string } | undefined)?.id === bounty.createdBy;
+  const isFinalized = bounty.status === "COMPLETED";
+  // walletAddress is required for contract actions. Do NOT fallback to user.id.
+  const walletAddress =
+    (session?.user as { walletAddress?: string })?.walletAddress || "";
+
+  // Identify if the current user is the assigned contributor
+  // using a fallback check on submissions or assumed backend field.
+  const isAssignedApplicant =
+    bounty.assignedContributorId === session?.user?.id ||
+    bounty.submissions?.some((s) => s.submittedBy === session?.user?.id) ||
+    (!isCreator && bounty.status === "IN_PROGRESS");
+
+  // submissions is present on BountyQuery (single-bounty query) but not on
+  // BountyFieldsFragment (list query). Accessed via the Partial<Bounty>
+  // intersection in useBountyDetail's return type.
+  const competitionSubmissions = bounty.submissions ?? [];
 
   return (
     <div className="flex flex-col lg:flex-row gap-10">
@@ -186,10 +222,53 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
 
         {!isCancelled && pool && <EscrowDetailPanel poolId={bountyId} />}
         <RefundStatusTracker bountyId={bountyId} isCancelled={isCancelled} />
-        {bounty.type !== "FIXED_PRICE" && (
-          <BountyDetailSubmissionsCard bounty={bounty} />
-        )}
+
+        {/* Model 2 Application Flow integration */}
+        {bounty.type === "MILESTONE_BASED" &&
+          isCreator &&
+          bounty.status === "OPEN" && (
+            <ApplicationReviewDashboard
+              bountyId={bountyId}
+              creatorAddress={walletAddress}
+              applications={getApplications(bounty)}
+            />
+          )}
+
+        {bounty.type === "MILESTONE_BASED" &&
+          isAssignedApplicant &&
+          walletAddress &&
+          bounty.status === "IN_PROGRESS" && (
+            <ApplicationSubmitWorkPanel
+              bountyId={bountyId}
+              contributorAddress={walletAddress}
+            />
+          )}
+
+        {bounty.type === "MILESTONE_BASED" &&
+          isCreator &&
+          bounty.status === "UNDER_REVIEW" && (
+            <SubmissionApprovalPanel
+              bounty={bounty}
+              creatorAddress={walletAddress}
+              submittedWorkCid={
+                bounty.submissions?.[0]?.githubPullRequestUrl || undefined
+              }
+            />
+          )}
+
+        {bounty.type !== "FIXED_PRICE" &&
+          bounty.type !== "MILESTONE_BASED" &&
+          !isCompetition && <BountyDetailSubmissionsCard bounty={bounty} />}
         {bounty.type === "FIXED_PRICE" && <FcfsApprovalPanel bounty={bounty} />}
+        {isCompetition && isCreator && (pastDeadline || isFinalized) && (
+          <CompetitionJudging
+            bountyId={bountyId}
+            submissions={competitionSubmissions}
+            isFinalized={isFinalized}
+            totalReward={bounty.rewardAmount}
+            currency={bounty.rewardCurrency}
+          />
+        )}
       </div>
 
       {/* Sidebar */}

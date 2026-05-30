@@ -5,27 +5,8 @@ import {
   UseMutationOptions,
 } from "@tanstack/react-query";
 import { fetcher } from "./client";
-
-/**
- * TypedDocumentString is a runtime class used by generated GraphQL documents.
- * It extends String to hold the GraphQL query string and carries type metadata.
- */
-export class TypedDocumentString<
-  TResult = unknown,
-  TVariables extends object = Record<string, unknown>,
-> extends String {
-  __apiType?: ((variables: TVariables) => TResult) | undefined;
-  private value: string;
-  __meta__?: Record<string, unknown> | undefined;
-  constructor(value: string, __meta__?: Record<string, unknown> | undefined) {
-    super(value);
-    this.value = value;
-    this.__meta__ = __meta__;
-  }
-  override toString(): string {
-    return this.value;
-  }
-}
+export { TypedDocumentString } from "./typed-document-string";
+import { TypedDocumentString } from "./typed-document-string";
 
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
@@ -1952,6 +1933,10 @@ export type BountyFieldsFragment = {
   githubIssueUrl: string;
   githubIssueNumber?: number | null;
   createdBy: string;
+  // Pending backend fields — will be populated once the backend schema adds them.
+  // Until then these are undefined and consumers must fall back gracefully.
+  maxParticipants?: number | null;
+  claimCount?: number | null;
   organization?: {
     __typename?: "BountyOrganization";
     id: string;
@@ -2253,6 +2238,45 @@ export type MarkSubmissionPaidMutation = {
   };
 };
 
+export type AdminDisputeDetailQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type AdminDisputeDetailQuery = {
+  __typename?: "Query";
+  adminDisputeDetail: {
+    __typename?: "AdminDisputeDto";
+    id: string;
+    campaignId: string;
+    description: string;
+    reason: DisputeReasonEnum;
+    status: DisputeStatusEnum;
+    resolution?: string | null;
+    milestoneId?: string | null;
+    createdAt: string;
+  };
+};
+
+export type ResolveDisputeMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+  input: AdminResolveDisputeDto;
+}>;
+
+export type ResolveDisputeMutation = {
+  __typename?: "Mutation";
+  resolveDispute: {
+    __typename?: "AdminDisputeDto";
+    id: string;
+    campaignId: string;
+    description: string;
+    reason: DisputeReasonEnum;
+    status: DisputeStatusEnum;
+    resolution?: string | null;
+    milestoneId?: string | null;
+    createdAt: string;
+  };
+};
+
 export const BountyFieldsFragmentDoc = new TypedDocumentString(
   `
     fragment BountyFields on Bounty {
@@ -2426,6 +2450,90 @@ export const useBookmarksQuery = <TData = BookmarksQuery, TError = unknown>(
       BookmarksDocument,
       variables,
     ),
+    ...options,
+  });
+};
+
+export const AdminDisputeDetailDocument = new TypedDocumentString(`
+    query AdminDisputeDetail($id: ID!) {
+  adminDisputeDetail(id: $id) {
+    id
+    campaignId
+    description
+    reason
+    status
+    resolution
+    milestoneId
+    createdAt
+  }
+}
+    `);
+
+export const useAdminDisputeDetailQuery = <
+  TData = AdminDisputeDetailQuery,
+  TError = unknown,
+>(
+  variables: AdminDisputeDetailQueryVariables,
+  options?: Omit<
+    UseQueryOptions<AdminDisputeDetailQuery, TError, TData>,
+    "queryKey"
+  > & {
+    queryKey?: UseQueryOptions<
+      AdminDisputeDetailQuery,
+      TError,
+      TData
+    >["queryKey"];
+  },
+) => {
+  return useQuery<AdminDisputeDetailQuery, TError, TData>({
+    queryKey: ["AdminDisputeDetail", variables],
+    queryFn: fetcher<AdminDisputeDetailQuery, AdminDisputeDetailQueryVariables>(
+      AdminDisputeDetailDocument,
+      variables,
+    ),
+    ...options,
+  });
+};
+
+useAdminDisputeDetailQuery.getKey = (
+  variables: AdminDisputeDetailQueryVariables,
+) => ["AdminDisputeDetail", variables];
+
+export const ResolveDisputeDocument = new TypedDocumentString(`
+    mutation ResolveDispute($id: ID!, $input: AdminResolveDisputeDto!) {
+  resolveDispute(id: $id, input: $input) {
+    id
+    campaignId
+    description
+    reason
+    status
+    resolution
+    milestoneId
+    createdAt
+  }
+}
+    `);
+
+export const useResolveDisputeMutation = <TError = unknown, TContext = unknown>(
+  options?: UseMutationOptions<
+    ResolveDisputeMutation,
+    TError,
+    ResolveDisputeMutationVariables,
+    TContext
+  >,
+) => {
+  return useMutation<
+    ResolveDisputeMutation,
+    TError,
+    ResolveDisputeMutationVariables,
+    TContext
+  >({
+    mutationKey: ["ResolveDispute"],
+    mutationFn: (variables?: ResolveDisputeMutationVariables) =>
+      fetcher<ResolveDisputeMutation, ResolveDisputeMutationVariables>(
+        ResolveDisputeDocument,
+        variables,
+      )(),
     ...options,
   });
 };

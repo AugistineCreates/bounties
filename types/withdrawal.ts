@@ -1,4 +1,4 @@
-import { KYCTier } from './compliance';
+import { KYCTier } from "./compliance";
 
 export interface WithdrawalRequest {
   id: string;
@@ -9,7 +9,7 @@ export interface WithdrawalRequest {
   destinationName?: string;
   fee: number;
   netAmount: number;
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
   compliance: {
     tierAtSubmission: KYCTier;
     limitsChecked: boolean;
@@ -29,18 +29,20 @@ export interface WithdrawalValidationResult {
   blockers: {
     insufficientBalance?: boolean;
     exceedsLimit?: boolean;
-    limitType?: 'daily' | 'weekly' | 'monthly' | 'perTransaction';
+    limitType?: "daily" | "weekly" | "monthly" | "perTransaction";
     complianceHold?: boolean;
     restrictedJurisdiction?: boolean;
     termsNotAccepted?: boolean;
     unverifiedAccount?: boolean;
+    invalidAmount?: boolean;
+    feeTooHigh?: boolean;
   };
 }
 
 export interface WithdrawalHistoryFilters {
   startDate?: string;
   endDate?: string;
-  status?: WithdrawalRequest['status'];
+  status?: WithdrawalRequest["status"];
   limit?: number;
   offset?: number;
 }

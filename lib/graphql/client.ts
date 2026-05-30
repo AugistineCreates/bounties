@@ -9,7 +9,7 @@ import {
 import { isAuthStatus } from "./errors";
 import { toast } from "sonner";
 import { getAccessToken } from "../auth-utils";
-import { TypedDocumentString } from "@/lib/graphql/generated";
+import { TypedDocumentString } from "./typed-document-string";
 
 export type GraphQLRequestDocument =
   | RequestDocument
@@ -49,8 +49,6 @@ export const graphQLClient = new GraphQLClient(url, {
  */
 function normalizeDocument(query: GraphQLRequestDocument): RequestDocument {
   if (typeof query === "string") return query;
-
-  // TypedDocumentString behaves like string
   return query.toString();
 }
 
@@ -72,8 +70,6 @@ export const fetcher = <TData, TVariables extends Variables = Variables>(
     const requestDocument = normalizeDocument(query);
 
     try {
-      // Build request options and assert to RequestOptions to satisfy
-      // graphql-request's complex conditional types
       const requestOptions = {
         document: requestDocument,
         variables: variables ?? ({} as TVariables),
@@ -82,7 +78,6 @@ export const fetcher = <TData, TVariables extends Variables = Variables>(
 
       return await graphQLClient.request<TData, TVariables>(requestOptions);
     } catch (error: unknown) {
-      // Global auth error handling
       const gqlError = error as {
         response?: {
           errors?: Array<{ extensions?: { status?: number } }>;

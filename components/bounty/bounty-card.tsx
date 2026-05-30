@@ -9,10 +9,11 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Clock, Zap } from "lucide-react";
+import { Clock, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { BountyFieldsFragment } from "@/lib/graphql/generated";
+import type { Bounty } from "@/types/bounty";
 import { EscrowStatus } from "./escrow-status";
 import { useEscrowPool } from "@/hooks/use-escrow";
 import { getRoundPhase } from "@/hooks/use-lightning-rounds";
@@ -91,6 +92,10 @@ export function BountyCard({
     statusConfig[normalizedStatus.toLowerCase()] ?? statusConfig.open;
   const isFcfsClaimed =
     bounty.type === "FIXED_PRICE" && normalizedStatus === "IN_PROGRESS";
+  const isCompetition = bounty.type === "COMPETITION";
+  // claimCount and maxParticipants are pending backend schema fields; use safe fallbacks.
+  const slotCount = bounty._count?.submissions ?? 0;
+  const maxParticipants = null;
   const timeLeft = bounty.updatedAt
     ? formatDistanceToNow(new Date(bounty.updatedAt), { addSuffix: true })
     : "N/A";
@@ -115,6 +120,8 @@ export function BountyCard({
 
   return (
     <Card
+      data-testid="bounty-card"
+      data-bounty-id={bounty.id}
       className={cn(
         "overflow-hidden w-full max-w-sm h-full rounded-lg cursor-pointer transition-all duration-300",
         "flex flex-col relative", // Add relative for bookmark button positioning
@@ -212,6 +219,20 @@ export function BountyCard({
             <Badge variant="outline" className="text-xs px-2.5 py-1 ">
               {bounty.type.replace(/_/g, " ")}
             </Badge>
+            {isCompetition && (
+              <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs px-2.5 py-1 flex items-center gap-1">
+                <Users className="size-3" />
+                {slotCount}
+                {maxParticipants != null ? `/${maxParticipants}` : ""} joined
+              </Badge>
+            )}
+            {bounty.type === "MULTI_WINNER_MILESTONE" && (
+              <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs px-2.5 py-1 flex items-center gap-1">
+                <Users className="size-3" />
+                {(bounty as unknown as Bounty).totalSlotsOccupied ?? 0} /{" "}
+                {(bounty as unknown as Bounty).maxSlots ?? 5} slots
+              </Badge>
+            )}
           </div>
         </CardHeader>
 

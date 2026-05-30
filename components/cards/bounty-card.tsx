@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Users,
 } from "lucide-react";
 import {
   Card,
@@ -116,9 +117,18 @@ export function BountyCard({ bounty }: BountyCardProps) {
                 </div>
               </div>
             </div>
-            <Badge variant="outline" className="bg-primary/10 text-primary">
-              {bounty.type.replace(/_/g, " ")}
-            </Badge>
+            <div className="flex flex-col items-end gap-1.5">
+              <Badge variant="outline" className="bg-primary/10 text-primary">
+                {bounty.type.replace(/_/g, " ")}
+              </Badge>
+              {bounty.type === "MULTI_WINNER_MILESTONE" && (
+                <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs px-2 py-0.5 flex items-center gap-1">
+                  <Users className="size-3" />
+                  {bounty.totalSlotsOccupied ?? 0} / {bounty.maxSlots ?? 5}{" "}
+                  slots
+                </Badge>
+              )}
+            </div>
           </div>
 
           {/* Metadata */}
