@@ -54,7 +54,7 @@ const MOCK_BOUNTY_UNDER_REVIEW = {
       submittedBy: CONTRIBUTOR_ID,
       githubPullRequestUrl: "QmFakeIpfsCid1234",
       status: "PENDING",
-      reviewComments: null,
+      reviewComments: null as string | null,
       reviewedAt: null,
       reviewedBy: null,
       paidAt: null,

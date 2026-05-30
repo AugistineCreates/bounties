@@ -168,6 +168,19 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
     (bounty as { submissions?: CompetitionSubmissionEntry[] | null })
       .submissions ?? [];
 
+  const mySubmission = bounty.submissions?.find(
+    (s) => s.submittedBy === session?.user?.id,
+  );
+  const hasRevision =
+    mySubmission?.status === "REVISION_REQUESTED" &&
+    !!mySubmission?.reviewComments;
+  const showSubmitPanel =
+    bounty.type === "MILESTONE_BASED" &&
+    isAssignedApplicant &&
+    !!walletAddress &&
+    (bounty.status === "IN_PROGRESS" ||
+      (bounty.status === "UNDER_REVIEW" && hasRevision));
+
   return (
     <div className="flex flex-col lg:flex-row gap-10">
       {/* Main content */}
@@ -240,33 +253,17 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
             />
           )}
 
-        {bounty.type === "MILESTONE_BASED" &&
-          isAssignedApplicant &&
-          walletAddress &&
-          (() => {
-            const mySubmission = bounty.submissions?.find(
-              (s) => s.submittedBy === session?.user?.id,
-            );
-            const hasRevision =
-              mySubmission?.status === "REVISION_REQUESTED" &&
-              !!mySubmission?.reviewComments;
-            return (
-              bounty.status === "IN_PROGRESS" ||
-              (bounty.status === "UNDER_REVIEW" && hasRevision)
-            );
-          })() && (
-            <ApplicationSubmitWorkPanel
-              bountyId={bountyId}
-              contributorAddress={walletAddress}
-              revisionFeedback={
-                bounty.submissions?.find(
-                  (s) =>
-                    s.submittedBy === session?.user?.id &&
-                    s.status === "REVISION_REQUESTED",
-                )?.reviewComments ?? undefined
-              }
-            />
-          )}
+        {showSubmitPanel && (
+          <ApplicationSubmitWorkPanel
+            bountyId={bountyId}
+            contributorAddress={walletAddress}
+            revisionFeedback={
+              hasRevision
+                ? (mySubmission?.reviewComments ?? undefined)
+                : undefined
+            }
+          />
+        )}
 
         {bounty.type === "MILESTONE_BASED" &&
           isCreator &&
