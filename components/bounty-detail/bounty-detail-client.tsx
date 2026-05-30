@@ -13,7 +13,6 @@ import { BountyDetailSkeleton } from "@/components/ui/loading";
 import { useBountyDetail } from "@/hooks/use-bounty-detail";
 import { FcfsApprovalPanel } from "@/components/bounty/fcfs-approval-panel";
 import { CompetitionJudging } from "@/components/bounty/competition-judging";
-import type { CompetitionSubmissionEntry } from "@/components/bounty/competition-judging";
 import { EscrowDetailPanel } from "../bounty/escrow-detail-panel";
 import { RefundStatusTracker } from "../bounty/refund-status";
 import { FeeCalculator } from "../bounty/fee-calculator";
@@ -72,10 +71,7 @@ function getFullMilestoneData(bounty: BountyData): {
 // Backend does not currently provide applications in the response.
 // Fall back to empty array until the schema supports it.
 const getApplications = (bounty: BountyData): Application[] => {
-  return (
-    (bounty as BountyData & { applications?: Application[] })?.applications ??
-    []
-  );
+  return bounty?.applications ?? [];
 };
 
 export function BountyDetailClient({ bountyId }: { bountyId: string }) {
@@ -156,17 +152,14 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
   // Identify if the current user is the assigned contributor
   // using a fallback check on submissions or assumed backend field.
   const isAssignedApplicant =
-    (bounty as BountyData & { assignedContributorId?: string })
-      ?.assignedContributorId === session?.user?.id ||
+    bounty.assignedContributorId === session?.user?.id ||
     bounty.submissions?.some((s) => s.submittedBy === session?.user?.id) ||
     (!isCreator && bounty.status === "IN_PROGRESS");
 
   // submissions is present on BountyQuery (single-bounty query) but not on
-  // BountyFieldsFragment (list query). The cast is safe here because
-  // useBountyDetail returns BountyFieldsFragment & Partial<BountyQuery["bounty"]>.
-  const competitionSubmissions =
-    (bounty as { submissions?: CompetitionSubmissionEntry[] | null })
-      .submissions ?? [];
+  // BountyFieldsFragment (list query). Accessed via the Partial<Bounty>
+  // intersection in useBountyDetail's return type.
+  const competitionSubmissions = bounty.submissions ?? [];
 
   return (
     <div className="flex flex-col lg:flex-row gap-10">
