@@ -13,6 +13,22 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import {
+  useReleasePayment,
+  useAdvanceContributor,
+  useRemoveContributor,
+  useSendMessage,
+} from "@/hooks/use-bounty-application";
+import {
   ChevronRight,
   UserMinus,
   Loader2,
@@ -23,6 +39,7 @@ import {
 } from "lucide-react";
 
 interface Model4MaintainerDashboardProps {
+  bountyId: string;
   milestones: Milestone[];
   contributors: ContributorProgress[];
   maxSlots?: number;
@@ -30,18 +47,78 @@ interface Model4MaintainerDashboardProps {
 }
 
 export function Model4MaintainerDashboard({
+  bountyId,
   milestones,
   contributors: initialContributors,
   maxSlots = 5,
   className,
 }: Model4MaintainerDashboardProps) {
-  const [loadingAction, setLoadingAction] = React.useState<string | null>(null);
+  const releasePayment = useReleasePayment(bountyId);
+  const advanceContributor = useAdvanceContributor(bountyId);
+  const removeContributor = useRemoveContributor(bountyId);
+  const sendMessage = useSendMessage(bountyId);
 
-  const handleAction = async (action: string, userName: string) => {
-    setLoadingAction(`${action}-${userName}`);
-    console.log(`[Coming soon] ${action} for ${userName}`);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoadingAction(null);
+  const [selectedContributor, setSelectedContributor] =
+    React.useState<ContributorProgress | null>(null);
+  const [isSubmissionsOpen, setIsSubmissionsOpen] = React.useState(false);
+  const [isMessageOpen, setIsMessageOpen] = React.useState(false);
+  const [messageText, setMessageText] = React.useState("");
+
+  const handleReleasePayment = (contributor: ContributorProgress) => {
+    releasePayment.mutate(
+      {
+        contributorId: contributor.userId,
+        milestoneId: contributor.currentMilestoneId,
+      },
+      {
+        onSuccess: () =>
+          toast.success(`Payment released for ${contributor.userName}`),
+      },
+    );
+  };
+
+  const handleAdvance = (contributor: ContributorProgress) => {
+    advanceContributor.mutate(
+      { contributorId: contributor.userId },
+      {
+        onSuccess: () =>
+          toast.success(`${contributor.userName} advanced to next milestone`),
+      },
+    );
+  };
+
+  const handleRemove = (contributor: ContributorProgress) => {
+    removeContributor.mutate(
+      { contributorId: contributor.userId },
+      {
+        onSuccess: () =>
+          toast.success(`${contributor.userName} removed from bounty`),
+      },
+    );
+  };
+
+  const handleOpenSubmissions = (contributor: ContributorProgress) => {
+    setSelectedContributor(contributor);
+    setIsSubmissionsOpen(true);
+  };
+
+  const handleOpenMessage = (contributor: ContributorProgress) => {
+    setSelectedContributor(contributor);
+    setMessageText("");
+    setIsMessageOpen(true);
+  };
+
+  const handleSendMessage = () => {
+    if (!selectedContributor || !messageText.trim()) return;
+    sendMessage.mutate(
+      { contributorId: selectedContributor.userId, message: messageText },
+      {
+        onSuccess: () => {
+          toast.success(`Message sent to ${selectedContributor.userName}`);
+          setIsMessageOpen(false);
+        },
+      },
+    );
   };
 
   return (
@@ -135,18 +212,12 @@ export function Model4MaintainerDashboard({
                             variant="ghost"
                             size="icon-sm"
                             className="text-gray-400 hover:text-white"
-                            aria-label="Send message"
-                            onClick={() =>
-                              handleAction("Message", contributor.userName)
-                            }
-                            disabled={loadingAction !== null}
+                            onClick={() => handleOpenMessage(contributor)}
                           >
                             <MessageSquare className="size-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          Send Message [Coming soon]
-                        </TooltipContent>
+                        <TooltipContent>Send Message</TooltipContent>
                       </Tooltip>
 
                       <Tooltip>
@@ -155,15 +226,9 @@ export function Model4MaintainerDashboard({
                             variant="outline"
                             size="sm"
                             className="h-8 text-xs border-gray-700 hover:bg-gray-800"
-                            onClick={() =>
-                              handleAction(
-                                "View Submissions",
-                                contributor.userName,
-                              )
-                            }
-                            disabled={loadingAction !== null}
+                            onClick={() => handleOpenSubmissions(contributor)}
                           >
-                            View Submissions [Coming soon]
+                            View Submissions
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Review work</TooltipContent>
@@ -174,21 +239,21 @@ export function Model4MaintainerDashboard({
                           <Button
                             size="sm"
                             className="h-8 text-xs bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 font-bold"
-                            onClick={() =>
-                              handleAction(
-                                "Release Payment",
-                                contributor.userName,
-                              )
+                            onClick={() => handleReleasePayment(contributor)}
+                            disabled={
+                              releasePayment.isPending &&
+                              releasePayment.variables?.contributorId ===
+                                contributor.userId
                             }
-                            disabled={loadingAction !== null}
                           >
-                            {loadingAction ===
-                            `Release Payment-${contributor.userName}` ? (
+                            {releasePayment.isPending &&
+                            releasePayment.variables?.contributorId ===
+                              contributor.userId ? (
                               <Loader2 className="size-3 mr-1.5 animate-spin" />
                             ) : (
                               <Coins className="size-3 mr-1.5" />
                             )}
-                            Release Payment [Coming soon]
+                            Release Payment
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Pay for milestone</TooltipContent>
@@ -200,18 +265,20 @@ export function Model4MaintainerDashboard({
                             size="sm"
                             variant="secondary"
                             className="h-8 text-xs font-bold"
-                            onClick={() =>
-                              handleAction("Advance", contributor.userName)
+                            onClick={() => handleAdvance(contributor)}
+                            disabled={
+                              advanceContributor.isPending &&
+                              advanceContributor.variables?.contributorId ===
+                                contributor.userId
                             }
-                            disabled={loadingAction !== null}
                           >
-                            {loadingAction ===
-                            `Advance-${contributor.userName}` ? (
+                            {advanceContributor.isPending &&
+                            advanceContributor.variables?.contributorId ===
+                              contributor.userId ? (
                               <Loader2 className="size-3 mr-1.5 animate-spin" />
                             ) : (
                               <>
-                                Advance [Coming soon]{" "}
-                                <ArrowRight className="size-3 ml-1.5" />
+                                Advance <ArrowRight className="size-3 ml-1.5" />
                               </>
                             )}
                           </Button>
@@ -225,18 +292,23 @@ export function Model4MaintainerDashboard({
                             variant="ghost"
                             size="icon-sm"
                             className="text-red-400/50 hover:text-red-400 hover:bg-red-400/10"
-                            aria-label="Remove from slot"
-                            onClick={() =>
-                              handleAction("Remove", contributor.userName)
+                            onClick={() => handleRemove(contributor)}
+                            disabled={
+                              removeContributor.isPending &&
+                              removeContributor.variables?.contributorId ===
+                                contributor.userId
                             }
-                            disabled={loadingAction !== null}
                           >
-                            <UserMinus className="size-4" />
+                            {removeContributor.isPending &&
+                            removeContributor.variables?.contributorId ===
+                              contributor.userId ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <UserMinus className="size-4" />
+                            )}
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          Remove from slot [Coming soon]
-                        </TooltipContent>
+                        <TooltipContent>Remove from slot</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </div>
@@ -273,6 +345,60 @@ export function Model4MaintainerDashboard({
             </Tooltip>
           </TooltipProvider>
         </div>
+
+        {/* Modals */}
+        <Dialog open={isSubmissionsOpen} onOpenChange={setIsSubmissionsOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Submissions for {selectedContributor?.userName}
+              </DialogTitle>
+              <DialogDescription>
+                Review the submitted work from this contributor.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6 text-center text-gray-400">
+              No submissions found for this contributor.
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setIsSubmissionsOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isMessageOpen} onOpenChange={setIsMessageOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Message {selectedContributor?.userName}</DialogTitle>
+              <DialogDescription>
+                Send a message directly to this contributor regarding their
+                application.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Textarea
+                placeholder="Type your message here..."
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsMessageOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendMessage}
+                disabled={sendMessage.isPending || !messageText.trim()}
+              >
+                {sendMessage.isPending && (
+                  <Loader2 className="size-3 mr-1.5 animate-spin" />
+                )}
+                Send Message
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

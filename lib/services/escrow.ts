@@ -332,6 +332,44 @@ export class EscrowService {
     return this.cancellations[bountyId] || null;
   }
 
+  /**
+   * Release payment to a contributor from the escrow pool.
+   */
+  static async releasePayment(
+    poolId: string,
+    amount: number,
+  ): Promise<EscrowPool> {
+    await this.simulateDelay(500);
+
+    let pool = this.pools[poolId];
+    if (!pool) {
+      // Initialize pool if it doesn't exist for the given bounty ID
+      pool = {
+        poolId,
+        totalAmount: 500,
+        asset: "USDC",
+        isLocked: true,
+        expiry: null,
+        releasedAmount: 0,
+        status: "Escrowed",
+      };
+      this.pools[poolId] = pool;
+    }
+
+    const newReleased = Math.min(pool.totalAmount, pool.releasedAmount + amount);
+    const status =
+      newReleased >= pool.totalAmount ? "Fully Released" : "Partially Released";
+
+    const updated: EscrowPool = {
+      ...pool,
+      releasedAmount: newReleased,
+      status,
+    };
+    this.pools[poolId] = updated;
+    return updated;
+  }
+
+
   private static simulateDelay(ms = 300): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
