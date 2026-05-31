@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ExternalLink,
   ShieldCheck,
+  RotateCcw,
 } from "lucide-react";
 import {
   Card,
@@ -18,7 +19,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { useApproveApplicationSubmission } from "@/hooks/use-bounty-application";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import {
+  useApproveApplicationSubmission,
+  useRequestRevisions,
+} from "@/hooks/use-bounty-application";
 import type { BountyFieldsFragment } from "@/lib/graphql/generated";
 import type { Bounty } from "@/types/bounty";
 
@@ -29,6 +35,7 @@ interface SubmissionApprovalPanelProps {
   creatorAddress: string;
   submittedWorkCid?: string;
   submissionDescription?: string;
+  submissionId?: string;
 }
 
 export function SubmissionApprovalPanel({
@@ -36,11 +43,17 @@ export function SubmissionApprovalPanel({
   creatorAddress,
   submittedWorkCid,
   submissionDescription,
+  submissionId,
 }: SubmissionApprovalPanelProps) {
   const [points, setPoints] = useState<number>(5);
+  const [showRevisionForm, setShowRevisionForm] = useState(false);
+  const [revisionFeedback, setRevisionFeedback] = useState("");
 
   const { mutate: approveSubmission, isPending: isApproving } =
     useApproveApplicationSubmission();
+
+  const { mutate: requestRevisions, isPending: isRequestingRevisions } =
+    useRequestRevisions();
 
   const handleApprove = () => {
     const clampedPoints = Math.max(1, Math.min(100, points || 0));
@@ -49,6 +62,27 @@ export function SubmissionApprovalPanel({
       creatorAddress,
       points: clampedPoints,
     });
+  };
+
+  const handleRequestRevisions = () => {
+    if (!submissionId || !revisionFeedback.trim()) return;
+    requestRevisions(
+      {
+        bountyId: bounty.id,
+        submissionId,
+        feedback: revisionFeedback.trim(),
+      },
+      {
+        onSuccess: () => {
+          toast.success("Revision request sent to contributor.");
+          setShowRevisionForm(false);
+          setRevisionFeedback("");
+        },
+        onError: () => {
+          toast.error("Failed to request revisions. Please try again.");
+        },
+      },
+    );
   };
 
   return (
@@ -131,25 +165,73 @@ export function SubmissionApprovalPanel({
             </Button>
           </div>
 
-          {/* Revision Section - Coming Soon */}
+          {/* Revision Section */}
           <div className="space-y-4 border-l border-gray-800/50 pl-6">
-            <div className="h-full flex flex-col justify-center items-center text-center p-4 border border-dashed border-gray-800 rounded-lg opacity-60">
-              <AlertTriangle className="size-6 text-gray-500 mb-2" />
-              <h4 className="text-sm font-medium text-gray-400 mb-1">
-                Needs Changes?
-              </h4>
-              <p className="text-xs text-gray-500 mb-4">
-                Request revisions before releasing the escrow.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-gray-700 text-gray-500 cursor-not-allowed"
-                disabled
-              >
-                Coming Soon
-              </Button>
-            </div>
+            {!showRevisionForm ? (
+              <div className="h-full flex flex-col justify-center items-center text-center p-4 border border-dashed border-gray-800 rounded-lg">
+                <AlertTriangle className="size-6 text-amber-500 mb-2" />
+                <h4 className="text-sm font-medium text-gray-300 mb-1">
+                  Needs Changes?
+                </h4>
+                <p className="text-xs text-gray-500 mb-4">
+                  Request revisions before releasing the escrow.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-700/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-600"
+                  onClick={() => setShowRevisionForm(true)}
+                  disabled={!submissionId}
+                >
+                  <RotateCcw className="size-3 mr-1.5" />
+                  Request Revisions
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <Label
+                    htmlFor="revision-feedback"
+                    className="text-sm font-medium text-gray-300"
+                  >
+                    Revision Feedback
+                  </Label>
+                  <p className="text-xs text-gray-500 mt-1 mb-2">
+                    Describe what needs to change before you can approve.
+                  </p>
+                  <Textarea
+                    id="revision-feedback"
+                    placeholder="Please update the API documentation to include error codes, and add unit tests for the authentication flow..."
+                    value={revisionFeedback}
+                    onChange={(e) => setRevisionFeedback(e.target.value)}
+                    className="bg-gray-900/50 border-gray-700 resize-none min-h-[100px]"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 border-gray-700 text-gray-400"
+                    onClick={() => {
+                      setShowRevisionForm(false);
+                      setRevisionFeedback("");
+                    }}
+                    disabled={isRequestingRevisions}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+                    onClick={handleRequestRevisions}
+                    disabled={!revisionFeedback.trim() || isRequestingRevisions}
+                  >
+                    <RotateCcw className="size-3 mr-1.5" />
+                    {isRequestingRevisions ? "Sending..." : "Send Request"}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

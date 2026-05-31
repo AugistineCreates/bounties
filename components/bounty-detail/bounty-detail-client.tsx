@@ -161,6 +161,19 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
   // intersection in useBountyDetail's return type.
   const competitionSubmissions = bounty.submissions ?? [];
 
+  const mySubmission = bounty.submissions?.find(
+    (s) => s.submittedBy === session?.user?.id,
+  );
+  const hasRevision =
+    mySubmission?.status === "REVISION_REQUESTED" &&
+    !!mySubmission?.reviewComments;
+  const showSubmitPanel =
+    bounty.type === "MILESTONE_BASED" &&
+    isAssignedApplicant &&
+    !!walletAddress &&
+    (bounty.status === "IN_PROGRESS" ||
+      (bounty.status === "UNDER_REVIEW" && hasRevision));
+
   return (
     <div className="flex flex-col lg:flex-row gap-10">
       {/* Main content */}
@@ -234,15 +247,17 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
             />
           )}
 
-        {bounty.type === "MILESTONE_BASED" &&
-          isAssignedApplicant &&
-          walletAddress &&
-          bounty.status === "IN_PROGRESS" && (
-            <ApplicationSubmitWorkPanel
-              bountyId={bountyId}
-              contributorAddress={walletAddress}
-            />
-          )}
+        {showSubmitPanel && (
+          <ApplicationSubmitWorkPanel
+            bountyId={bountyId}
+            contributorAddress={walletAddress}
+            revisionFeedback={
+              hasRevision
+                ? (mySubmission?.reviewComments ?? undefined)
+                : undefined
+            }
+          />
+        )}
 
         {bounty.type === "MILESTONE_BASED" &&
           isCreator &&
@@ -250,6 +265,7 @@ export function BountyDetailClient({ bountyId }: { bountyId: string }) {
             <SubmissionApprovalPanel
               bounty={bounty}
               creatorAddress={walletAddress}
+              submissionId={bounty.submissions?.[0]?.id}
               submittedWorkCid={
                 bounty.submissions?.[0]?.githubPullRequestUrl || undefined
               }
