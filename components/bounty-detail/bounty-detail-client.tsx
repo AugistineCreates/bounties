@@ -61,10 +61,14 @@ function getFullMilestoneData(bounty: BountyData): {
   milestones: Milestone[];
   contributorProgress: ContributorProgress[];
 } {
+  // Gate MOCK_MODEL4_CONTRIBUTORS behind development mode to prevent demo/mock users
+  // (e.g. Alice, Bob, David) from leaking into production milestone funnel components.
+  const isDev = process.env.NODE_ENV === "development";
   return {
     milestones: bounty?.milestones ?? MOCK_MODEL4_MILESTONES,
     contributorProgress:
-      bounty?.contributorProgress ?? MOCK_MODEL4_CONTRIBUTORS,
+      bounty?.contributorProgress ??
+      (isDev ? MOCK_MODEL4_CONTRIBUTORS : []),
   };
 }
 
